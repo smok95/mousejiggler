@@ -2,6 +2,8 @@
 
 C++ Win32 port of the original C# Mouse Jiggler application.
 
+> **Original Project:** [arkane-systems/mousejiggler](https://github.com/arkane-systems/mousejiggler) by Alistair J R Young
+
 ## Features
 
 - **Prevents screensaver activation** by periodically moving the mouse
