@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Build x64 Release
+      run: msbuild MouseJiggler.vcxproj /p:Configuration=Release /p:Platform=x64 /v:minimal
+
+    - name: Package artifacts
+      run: |
+        mkdir release
+        Copy-Item "bin\x64\Release\MouseJiggler.exe" "release\MouseJiggler.exe"
+        Copy-Item "README.md" "release\README.md"
+      shell: pwsh
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          release/MouseJiggler.exe
+          release/README.md
+        body: |
+          ## Mouse Jiggler C++ Win32 Release
+
+          Download MouseJiggler.exe for 64-bit Windows systems.
+
+          See [README.md](README.md) for usage instructions.
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

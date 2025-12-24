@@ -1,0 +1,32 @@
+name: CI Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        configuration: [Release]
+        platform: [x64, Win32]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Build ${{ matrix.platform }} ${{ matrix.configuration }}
+      run: msbuild MouseJiggler.vcxproj /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /v:minimal
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: MouseJiggler-${{ matrix.platform }}-${{ matrix.configuration }}
+        path: bin/${{ matrix.platform }}/${{ matrix.configuration }}/MouseJiggler.exe
