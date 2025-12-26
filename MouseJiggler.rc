@@ -1,45 +1,80 @@
 // Microsoft Visual C++ generated resource script.
 //
-#include "Resource.h"
+#include "resource.h"
+/////////////////////////////////////////////////////////////////////////////
+// 한국어(대한민국) resources
 
-#define APSTUDIO_READONLY_SYMBOLS
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_KOR)
+LANGUAGE LANG_KOREAN, SUBLANG_DEFAULT
+#pragma code_page(949)
+
+#ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////
 //
-// Generated from the TEXTINCLUDE 2 resource.
+// TEXTINCLUDE
 //
-#include "winres.h"
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+#endif    // 한국어(대한민국) resources
+/////////////////////////////////////////////////////////////////////////////
+
 
 /////////////////////////////////////////////////////////////////////////////
-#undef APSTUDIO_READONLY_SYMBOLS
-
-/////////////////////////////////////////////////////////////////////////////
-// English (United States) resources
+// 영어(미국) resources
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
 
 /////////////////////////////////////////////////////////////////////////////
 //
 // Dialog
 //
 
-IDD_MAINDIALOG DIALOGEX 0, 0, 240, 180
+IDD_MAINDIALOG DIALOGEX 0, 0, 240, 230
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Mouse Jiggler"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-    CONTROL         "Jiggling?",IDC_CHECK_JIGGLING,"Button",BS_AUTOCHECKBOX | BS_PUSHLIKE | WS_TABSTOP,7,7,226,20
-    CONTROL         "Settings...",IDC_CHECK_SETTINGS,"Button",BS_AUTOCHECKBOX | BS_PUSHLIKE | WS_TABSTOP,7,32,226,14
-
-    GROUPBOX        "",IDC_STATIC_SETTINGS,7,50,226,96
-    CONTROL         "Minimize on startup",IDC_CHECK_MINIMIZE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,63,150,10
-    CONTROL         "Zen jiggle?",IDC_CHECK_ZEN,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,78,150,10
-    LTEXT           "Jiggle period:",IDC_STATIC_PERIOD_LABEL,14,96,50,8
-    CONTROL         "",IDC_SLIDER_PERIOD,"msctls_trackbar32",TBS_AUTOTICKS | TBS_BOTH | WS_TABSTOP,14,108,150,20
-    LTEXT           "60 s",IDC_LABEL_PERIOD,170,111,50,8
-
-    PUSHBUTTON      "About...",IDC_BUTTON_ABOUT,7,152,70,21
-    PUSHBUTTON      "Minimize",IDC_BUTTON_MINIMIZE,143,152,90,21
+    CONTROL         "",IDC_CHECK_JIGGLING,"Button",BS_OWNERDRAW | WS_TABSTOP,7,7,226,20
+    GROUPBOX        "",IDC_STATIC_SETTINGS,7,32,226,164
+    CONTROL         "Minimize on startup",IDC_CHECK_MINIMIZE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,45,150,10
+    CONTROL         "Zen jiggle?",IDC_CHECK_ZEN,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,60,150,10
+    LTEXT           "Jiggle period:",IDC_STATIC_PERIOD_LABEL,14,78,50,8
+    CONTROL         "",IDC_SLIDER_PERIOD,"msctls_trackbar32",TBS_AUTOTICKS | TBS_BOTH | WS_TABSTOP,14,90,150,20
+    LTEXT           "60 s",IDC_LABEL_PERIOD,170,93,50,8
+    CONTROL         "Enable time restriction",IDC_CHECK_ENABLE_TIME,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,118,150,10
+    LTEXT           "Start time:",IDC_STATIC_START_TIME,14,135,40,8
+    EDITTEXT        IDC_EDIT_START_HOUR,60,133,25,12,ES_RIGHT | ES_NUMBER
+    CONTROL         "",IDC_SPIN_START_HOUR,"msctls_updown32",UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS,85,133,11,12
+    LTEXT           ":",IDC_STATIC_COLON1,91,135,5,8
+    EDITTEXT        IDC_EDIT_START_MINUTE,100,133,25,12,ES_RIGHT | ES_NUMBER
+    CONTROL         "",IDC_SPIN_START_MINUTE,"msctls_updown32",UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS,125,133,11,12
+    LTEXT           "End time:",IDC_STATIC_END_TIME,14,153,40,8
+    EDITTEXT        IDC_EDIT_END_HOUR,60,151,25,12,ES_RIGHT | ES_NUMBER
+    CONTROL         "",IDC_SPIN_END_HOUR,"msctls_updown32",UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS,85,151,11,12
+    LTEXT           ":",IDC_STATIC_COLON2,91,153,5,8
+    EDITTEXT        IDC_EDIT_END_MINUTE,100,151,25,12,ES_RIGHT | ES_NUMBER
+    CONTROL         "",IDC_SPIN_END_MINUTE,"msctls_updown32",UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS,125,151,11,12
+    PUSHBUTTON      "About...",IDC_BUTTON_ABOUT,7,202,70,21
+    PUSHBUTTON      "Minimize",IDC_BUTTON_MINIMIZE,143,202,90,21
 END
 
 IDD_ABOUTDIALOG DIALOGEX 0, 0, 250, 150
@@ -92,6 +127,7 @@ END
 // Icon with lowest ID value placed first to ensure application icon
 // remains consistent on all systems.
 IDI_MAINICON            ICON                    "icon.ico"
+
 IDI_TRAYICON            ICON                    "icon.ico"
 
 
@@ -101,8 +137,8 @@ IDI_TRAYICON            ICON                    "icon.ico"
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,0
- PRODUCTVERSION 1,0,0,0
+ FILEVERSION 0,2,0,0
+ PRODUCTVERSION 0,2,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -119,12 +155,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Arkane Systems"
             VALUE "FileDescription", "Mouse Jiggler - C++ Win32 Version"
-            VALUE "FileVersion", "1.0.0.0"
+            VALUE "FileVersion", "0.2.0.0"
             VALUE "InternalName", "MouseJiggler.exe"
             VALUE "LegalCopyright", "Copyright (C) 2025"
             VALUE "OriginalFilename", "MouseJiggler.exe"
             VALUE "ProductName", "Mouse Jiggler"
-            VALUE "ProductVersion", "1.0.0.0"
+            VALUE "ProductVersion", "0.2.0.0"
         END
     END
     BLOCK "VarFileInfo"
@@ -133,7 +169,7 @@ BEGIN
     END
 END
 
-#endif    // English (United States) resources
+#endif    // 영어(미국) resources
 /////////////////////////////////////////////////////////////////////////////
 
 
@@ -147,3 +183,4 @@ END
 
 /////////////////////////////////////////////////////////////////////////////
 #endif    // not APSTUDIO_INVOKED
+

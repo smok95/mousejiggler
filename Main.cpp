@@ -31,7 +31,14 @@ struct Settings {
     bool zenJiggle;
     int jigglePeriod;  // in seconds
     bool startJiggling;
-} g_Settings = { false, false, 60, false };
+
+    // Time restriction
+    bool enableTimeRestriction;
+    int startHour;      // 0-23
+    int startMinute;    // 0-59
+    int endHour;        // 0-23
+    int endMinute;      // 0-59
+} g_Settings = { false, false, 60, false, false, 9, 0, 18, 0 };
 
 // State
 bool g_IsJiggling = false;
@@ -51,6 +58,10 @@ void PerformJiggle(int delta);
 void StartJiggling();
 void StopJiggling();
 bool CreateSingleInstanceMutex();
+bool IsWithinTimeRange();
+void UpdateJigglingButton(HWND hDlg);
+void GetTimeRangeString(TCHAR* buffer, size_t bufferSize);
+void DrawPlayPauseButton(LPDRAWITEMSTRUCT pDIS);
 
 // Get INI file path (in the same directory as the executable)
 void InitializeIniPath() {
@@ -68,9 +79,22 @@ void LoadSettings() {
     g_Settings.zenJiggle = GetPrivateProfileInt(_T("Settings"), _T("ZenJiggle"), 0, g_IniFilePath) != 0;
     g_Settings.jigglePeriod = GetPrivateProfileInt(_T("Settings"), _T("JigglePeriod"), 60, g_IniFilePath);
 
+    // Load time restriction settings
+    g_Settings.enableTimeRestriction = GetPrivateProfileInt(_T("Settings"), _T("EnableTimeRestriction"), 0, g_IniFilePath) != 0;
+    g_Settings.startHour = GetPrivateProfileInt(_T("Settings"), _T("StartHour"), 9, g_IniFilePath);
+    g_Settings.startMinute = GetPrivateProfileInt(_T("Settings"), _T("StartMinute"), 0, g_IniFilePath);
+    g_Settings.endHour = GetPrivateProfileInt(_T("Settings"), _T("EndHour"), 18, g_IniFilePath);
+    g_Settings.endMinute = GetPrivateProfileInt(_T("Settings"), _T("EndMinute"), 0, g_IniFilePath);
+
     // Validate jiggle period
     if (g_Settings.jigglePeriod < 1) g_Settings.jigglePeriod = 1;
     if (g_Settings.jigglePeriod > 10800) g_Settings.jigglePeriod = 10800;
+
+    // Validate time values
+    if (g_Settings.startHour < 0 || g_Settings.startHour > 23) g_Settings.startHour = 9;
+    if (g_Settings.startMinute < 0 || g_Settings.startMinute > 59) g_Settings.startMinute = 0;
+    if (g_Settings.endHour < 0 || g_Settings.endHour > 23) g_Settings.endHour = 18;
+    if (g_Settings.endMinute < 0 || g_Settings.endMinute > 59) g_Settings.endMinute = 0;
 }
 
 // Save settings to INI file
@@ -85,6 +109,22 @@ void SaveSettings() {
 
     _stprintf_s(buffer, 32, _T("%d"), g_Settings.jigglePeriod);
     WritePrivateProfileString(_T("Settings"), _T("JigglePeriod"), buffer, g_IniFilePath);
+
+    // Save time restriction settings
+    _stprintf_s(buffer, 32, _T("%d"), g_Settings.enableTimeRestriction ? 1 : 0);
+    WritePrivateProfileString(_T("Settings"), _T("EnableTimeRestriction"), buffer, g_IniFilePath);
+
+    _stprintf_s(buffer, 32, _T("%d"), g_Settings.startHour);
+    WritePrivateProfileString(_T("Settings"), _T("StartHour"), buffer, g_IniFilePath);
+
+    _stprintf_s(buffer, 32, _T("%d"), g_Settings.startMinute);
+    WritePrivateProfileString(_T("Settings"), _T("StartMinute"), buffer, g_IniFilePath);
+
+    _stprintf_s(buffer, 32, _T("%d"), g_Settings.endHour);
+    WritePrivateProfileString(_T("Settings"), _T("EndHour"), buffer, g_IniFilePath);
+
+    _stprintf_s(buffer, 32, _T("%d"), g_Settings.endMinute);
+    WritePrivateProfileString(_T("Settings"), _T("EndMinute"), buffer, g_IniFilePath);
 }
 
 // Perform the mouse jiggle
@@ -122,6 +162,136 @@ void StopJiggling() {
     }
 }
 
+// Check if current time is within allowed time range
+bool IsWithinTimeRange() {
+    if (!g_Settings.enableTimeRestriction) {
+        return true;  // No restriction = always allowed
+    }
+
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+
+    int currentMinutes = st.wHour * 60 + st.wMinute;
+    int startMinutes = g_Settings.startHour * 60 + g_Settings.startMinute;
+    int endMinutes = g_Settings.endHour * 60 + g_Settings.endMinute;
+
+    // Handle overnight time range (e.g., 22:00 - 06:00)
+    if (startMinutes > endMinutes) {
+        return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+    } else {
+        return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+    }
+}
+
+// Update jiggling button (trigger repaint)
+void UpdateJigglingButton(HWND hDlg) {
+    HWND hButton = GetDlgItem(hDlg, IDC_CHECK_JIGGLING);
+    InvalidateRect(hButton, NULL, TRUE);
+}
+
+// Draw play/pause button with GDI
+void DrawPlayPauseButton(LPDRAWITEMSTRUCT pDIS) {
+    HDC hdc = pDIS->hDC;
+    RECT rc = pDIS->rcItem;
+
+    // Use global state variable directly
+    bool isJiggling = g_IsJiggling;
+    bool isHot = (pDIS->itemState & ODS_FOCUS) || (pDIS->itemState & ODS_HOTLIGHT);
+
+    // Draw button background
+    HBRUSH hBrush;
+    if (isJiggling) {
+        hBrush = CreateSolidBrush(RGB(240, 240, 240));  // Light gray when active
+    } else {
+        hBrush = CreateSolidBrush(RGB(255, 255, 255));  // White when inactive
+    }
+    FillRect(hdc, &rc, hBrush);
+    DeleteObject(hBrush);
+
+    // Draw border
+    HPEN hPen = CreatePen(PS_SOLID, isHot ? 2 : 1, RGB(0, 120, 215));  // Blue border
+    HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
+    HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
+    Rectangle(hdc, rc.left, rc.top, rc.right, rc.bottom);
+    SelectObject(hdc, hOldPen);
+    SelectObject(hdc, hOldBrush);
+    DeleteObject(hPen);
+
+    // Calculate center position for icon
+    int centerX = (rc.left + rc.right) / 2;
+    int centerY = (rc.top + rc.bottom) / 2;
+    int iconSize = 12;
+
+    // Draw icon
+    if (isJiggling) {
+        // Draw PAUSE icon (two vertical bars) in RED
+        HBRUSH hIconBrush = CreateSolidBrush(RGB(220, 50, 50));  // Red
+
+        RECT bar1 = { centerX - 6, centerY - iconSize/2, centerX - 2, centerY + iconSize/2 };
+        RECT bar2 = { centerX + 2, centerY - iconSize/2, centerX + 6, centerY + iconSize/2 };
+
+        FillRect(hdc, &bar1, hIconBrush);
+        FillRect(hdc, &bar2, hIconBrush);
+
+        DeleteObject(hIconBrush);
+
+        // Draw text "Jiggling..." to the right
+        SetBkMode(hdc, TRANSPARENT);
+        SetTextColor(hdc, RGB(220, 50, 50));
+        HFONT hFont = CreateFont(14, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                                OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
+                                DEFAULT_PITCH | FF_DONTCARE, _T("Segoe UI"));
+        HFONT hOldFont = (HFONT)SelectObject(hdc, hFont);
+
+        RECT textRc = rc;
+        textRc.left = centerX + 15;
+        DrawText(hdc, _T("Jiggling..."), -1, &textRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+        SelectObject(hdc, hOldFont);
+        DeleteObject(hFont);
+    } else {
+        // Draw PLAY icon (right-pointing triangle) in GREEN
+        HBRUSH hIconBrush = CreateSolidBrush(RGB(50, 180, 50));  // Green
+        HBRUSH hOldIconBrush = (HBRUSH)SelectObject(hdc, hIconBrush);
+
+        POINT triangle[3];
+        triangle[0].x = centerX - 5;
+        triangle[0].y = centerY - iconSize/2;
+        triangle[1].x = centerX - 5;
+        triangle[1].y = centerY + iconSize/2;
+        triangle[2].x = centerX + 7;
+        triangle[2].y = centerY;
+
+        SetPolyFillMode(hdc, WINDING);
+        Polygon(hdc, triangle, 3);
+
+        SelectObject(hdc, hOldIconBrush);
+        DeleteObject(hIconBrush);
+
+        // Draw text "Click to Start" to the right
+        SetBkMode(hdc, TRANSPARENT);
+        SetTextColor(hdc, RGB(50, 180, 50));
+        HFONT hFont = CreateFont(14, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                                OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
+                                DEFAULT_PITCH | FF_DONTCARE, _T("Segoe UI"));
+        HFONT hOldFont = (HFONT)SelectObject(hdc, hFont);
+
+        RECT textRc = rc;
+        textRc.left = centerX + 15;
+        DrawText(hdc, _T("Click to Start"), -1, &textRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+        SelectObject(hdc, hOldFont);
+        DeleteObject(hFont);
+    }
+}
+
+// Get time range string for tray tooltip
+void GetTimeRangeString(TCHAR* buffer, size_t bufferSize) {
+    _stprintf_s(buffer, bufferSize, _T("%02d:%02d - %02d:%02d"),
+                g_Settings.startHour, g_Settings.startMinute,
+                g_Settings.endHour, g_Settings.endMinute);
+}
+
 // Update the period label
 void UpdatePeriodLabel(HWND hDlg) {
     TCHAR text[64];
@@ -132,13 +302,30 @@ void UpdatePeriodLabel(HWND hDlg) {
 // Update tray icon tooltip
 void UpdateTrayIcon() {
     if (g_nid.hWnd) {
+        TCHAR text[128];
+
         if (!g_IsJiggling) {
-            _tcscpy_s(g_nid.szTip, 128, _T("Not jiggling the mouse."));
+            if (g_Settings.enableTimeRestriction) {
+                TCHAR timeRange[64];
+                GetTimeRangeString(timeRange, 64);
+                _stprintf_s(text, 128, _T("Not jiggling. Active: %s"), timeRange);
+                _tcscpy_s(g_nid.szTip, 128, text);
+            } else {
+                _tcscpy_s(g_nid.szTip, 128, _T("Not jiggling the mouse."));
+            }
         } else {
-            TCHAR text[128];
-            _stprintf_s(text, 128, _T("Jiggling mouse every %d s, %s Zen."),
-                g_Settings.jigglePeriod,
-                g_Settings.zenJiggle ? _T("with") : _T("without"));
+            if (g_Settings.enableTimeRestriction) {
+                TCHAR timeRange[64];
+                GetTimeRangeString(timeRange, 64);
+                _stprintf_s(text, 128, _T("Jiggling every %d s, %s Zen. Active: %s"),
+                    g_Settings.jigglePeriod,
+                    g_Settings.zenJiggle ? _T("with") : _T("without"),
+                    timeRange);
+            } else {
+                _stprintf_s(text, 128, _T("Jiggling mouse every %d s, %s Zen."),
+                    g_Settings.jigglePeriod,
+                    g_Settings.zenJiggle ? _T("with") : _T("without"));
+            }
             _tcscpy_s(g_nid.szTip, 128, text);
         }
         Shell_NotifyIcon(NIM_MODIFY, &g_nid);
@@ -209,18 +396,52 @@ INT_PTR CALLBACK MainDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
 
             UpdatePeriodLabel(hDlg);
 
-            // Settings panel initially hidden
-            ShowWindow(GetDlgItem(hDlg, IDC_STATIC_SETTINGS), SW_HIDE);
-            ShowWindow(GetDlgItem(hDlg, IDC_CHECK_MINIMIZE), SW_HIDE);
-            ShowWindow(GetDlgItem(hDlg, IDC_CHECK_ZEN), SW_HIDE);
-            ShowWindow(GetDlgItem(hDlg, IDC_SLIDER_PERIOD), SW_HIDE);
-            ShowWindow(GetDlgItem(hDlg, IDC_LABEL_PERIOD), SW_HIDE);
-            ShowWindow(GetDlgItem(hDlg, IDC_STATIC_PERIOD_LABEL), SW_HIDE);
+            // Initialize time restriction controls
+            CheckDlgButton(hDlg, IDC_CHECK_ENABLE_TIME,
+                          g_Settings.enableTimeRestriction ? BST_CHECKED : BST_UNCHECKED);
+
+            // Setup spin controls and edit controls for time input
+            // Set edit control values first
+            SetDlgItemInt(hDlg, IDC_EDIT_START_HOUR, g_Settings.startHour, FALSE);
+            SetDlgItemInt(hDlg, IDC_EDIT_START_MINUTE, g_Settings.startMinute, FALSE);
+            SetDlgItemInt(hDlg, IDC_EDIT_END_HOUR, g_Settings.endHour, FALSE);
+            SetDlgItemInt(hDlg, IDC_EDIT_END_MINUTE, g_Settings.endMinute, FALSE);
+
+            // Then setup spin controls
+            HWND hSpinStartHour = GetDlgItem(hDlg, IDC_SPIN_START_HOUR);
+            SendMessage(hSpinStartHour, UDM_SETRANGE, 0, MAKELPARAM(23, 0));
+            SendMessage(hSpinStartHour, UDM_SETPOS, 0, g_Settings.startHour);
+
+            HWND hSpinStartMinute = GetDlgItem(hDlg, IDC_SPIN_START_MINUTE);
+            SendMessage(hSpinStartMinute, UDM_SETRANGE, 0, MAKELPARAM(59, 0));
+            SendMessage(hSpinStartMinute, UDM_SETPOS, 0, g_Settings.startMinute);
+
+            HWND hSpinEndHour = GetDlgItem(hDlg, IDC_SPIN_END_HOUR);
+            SendMessage(hSpinEndHour, UDM_SETRANGE, 0, MAKELPARAM(23, 0));
+            SendMessage(hSpinEndHour, UDM_SETPOS, 0, g_Settings.endHour);
+
+            HWND hSpinEndMinute = GetDlgItem(hDlg, IDC_SPIN_END_MINUTE);
+            SendMessage(hSpinEndMinute, UDM_SETRANGE, 0, MAKELPARAM(59, 0));
+            SendMessage(hSpinEndMinute, UDM_SETPOS, 0, g_Settings.endMinute);
+
+            // Enable/disable time controls based on checkbox
+            BOOL enableTimeControls = g_Settings.enableTimeRestriction;
+            EnableWindow(GetDlgItem(hDlg, IDC_EDIT_START_HOUR), enableTimeControls);
+            EnableWindow(GetDlgItem(hDlg, IDC_EDIT_START_MINUTE), enableTimeControls);
+            EnableWindow(GetDlgItem(hDlg, IDC_EDIT_END_HOUR), enableTimeControls);
+            EnableWindow(GetDlgItem(hDlg, IDC_EDIT_END_MINUTE), enableTimeControls);
 
             // Start jiggling if requested
             if (g_Settings.startJiggling) {
-                CheckDlgButton(hDlg, IDC_CHECK_JIGGLING, BST_CHECKED);
                 StartJiggling();
+            }
+
+            // Update button icon
+            UpdateJigglingButton(hDlg);
+
+            // Start time check timer if restriction enabled
+            if (g_Settings.enableTimeRestriction) {
+                SetTimer(hDlg, TIMER_TIME_CHECK, 1000, NULL);  // Check every second
             }
 
             // Minimize on startup if requested
@@ -234,23 +455,13 @@ INT_PTR CALLBACK MainDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
         case IDC_CHECK_JIGGLING:
-            if (IsDlgButtonChecked(hDlg, IDC_CHECK_JIGGLING) == BST_CHECKED) {
-                StartJiggling();
-            } else {
+            // Toggle jiggling state
+            if (g_IsJiggling) {
                 StopJiggling();
+            } else {
+                StartJiggling();
             }
-            break;
-
-        case IDC_CHECK_SETTINGS:
-            {
-                BOOL show = IsDlgButtonChecked(hDlg, IDC_CHECK_SETTINGS) == BST_CHECKED;
-                ShowWindow(GetDlgItem(hDlg, IDC_STATIC_SETTINGS), show ? SW_SHOW : SW_HIDE);
-                ShowWindow(GetDlgItem(hDlg, IDC_CHECK_MINIMIZE), show ? SW_SHOW : SW_HIDE);
-                ShowWindow(GetDlgItem(hDlg, IDC_CHECK_ZEN), show ? SW_SHOW : SW_HIDE);
-                ShowWindow(GetDlgItem(hDlg, IDC_SLIDER_PERIOD), show ? SW_SHOW : SW_HIDE);
-                ShowWindow(GetDlgItem(hDlg, IDC_LABEL_PERIOD), show ? SW_SHOW : SW_HIDE);
-                ShowWindow(GetDlgItem(hDlg, IDC_STATIC_PERIOD_LABEL), show ? SW_SHOW : SW_HIDE);
-            }
+            UpdateJigglingButton(hDlg);
             break;
 
         case IDC_CHECK_MINIMIZE:
@@ -262,6 +473,52 @@ INT_PTR CALLBACK MainDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
             g_Settings.zenJiggle = IsDlgButtonChecked(hDlg, IDC_CHECK_ZEN) == BST_CHECKED;
             SaveSettings();
             UpdateTrayIcon();
+            break;
+
+        case IDC_CHECK_ENABLE_TIME:
+            g_Settings.enableTimeRestriction = IsDlgButtonChecked(hDlg, IDC_CHECK_ENABLE_TIME) == BST_CHECKED;
+            SaveSettings();
+
+            // Enable/disable time input controls
+            {
+                BOOL enableTimeControls = g_Settings.enableTimeRestriction;
+                EnableWindow(GetDlgItem(hDlg, IDC_EDIT_START_HOUR), enableTimeControls);
+                EnableWindow(GetDlgItem(hDlg, IDC_EDIT_START_MINUTE), enableTimeControls);
+                EnableWindow(GetDlgItem(hDlg, IDC_EDIT_END_HOUR), enableTimeControls);
+                EnableWindow(GetDlgItem(hDlg, IDC_EDIT_END_MINUTE), enableTimeControls);
+
+                // Start/stop time check timer
+                if (g_Settings.enableTimeRestriction) {
+                    SetTimer(hDlg, TIMER_TIME_CHECK, 1000, NULL);
+                    // Immediate check
+                    PostMessage(hDlg, WM_TIMER, TIMER_TIME_CHECK, 0);
+                } else {
+                    KillTimer(hDlg, TIMER_TIME_CHECK);
+                }
+            }
+
+            UpdateTrayIcon();
+            break;
+
+        case IDC_EDIT_START_HOUR:
+        case IDC_EDIT_START_MINUTE:
+        case IDC_EDIT_END_HOUR:
+        case IDC_EDIT_END_MINUTE:
+            if (HIWORD(wParam) == EN_KILLFOCUS) {
+                // Update when user leaves the field (avoids initialization issues)
+                g_Settings.startHour = GetDlgItemInt(hDlg, IDC_EDIT_START_HOUR, NULL, FALSE);
+                g_Settings.startMinute = GetDlgItemInt(hDlg, IDC_EDIT_START_MINUTE, NULL, FALSE);
+                g_Settings.endHour = GetDlgItemInt(hDlg, IDC_EDIT_END_HOUR, NULL, FALSE);
+                g_Settings.endMinute = GetDlgItemInt(hDlg, IDC_EDIT_END_MINUTE, NULL, FALSE);
+
+                // Clamp values
+                if (g_Settings.startHour > 23) g_Settings.startHour = 23;
+                if (g_Settings.startMinute > 59) g_Settings.startMinute = 59;
+                if (g_Settings.endHour > 23) g_Settings.endHour = 23;
+                if (g_Settings.endMinute > 59) g_Settings.endMinute = 59;
+
+                UpdateTrayIcon();
+            }
             break;
 
         case IDC_BUTTON_ABOUT:
@@ -277,18 +534,25 @@ INT_PTR CALLBACK MainDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
             break;
 
         case ID_TRAY_START:
-            CheckDlgButton(hDlg, IDC_CHECK_JIGGLING, BST_CHECKED);
             StartJiggling();
+            UpdateJigglingButton(hDlg);
             break;
 
         case ID_TRAY_STOP:
-            CheckDlgButton(hDlg, IDC_CHECK_JIGGLING, BST_UNCHECKED);
             StopJiggling();
+            UpdateJigglingButton(hDlg);
             break;
 
         case ID_TRAY_EXIT:
             SendMessage(hDlg, WM_CLOSE, 0, 0);
             break;
+        }
+        break;
+
+    case WM_DRAWITEM:
+        if (wParam == IDC_CHECK_JIGGLING) {
+            DrawPlayPauseButton((LPDRAWITEMSTRUCT)lParam);
+            return TRUE;
         }
         break;
 
@@ -320,6 +584,23 @@ INT_PTR CALLBACK MainDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
             }
             g_Zig = !g_Zig;
         }
+        else if (wParam == TIMER_TIME_CHECK) {
+            // Check if we should auto-start or auto-stop
+            if (g_Settings.enableTimeRestriction) {
+                bool shouldBeJiggling = IsWithinTimeRange();
+
+                if (shouldBeJiggling && !g_IsJiggling) {
+                    // Auto-start: We're in time range but not jiggling
+                    StartJiggling();
+                    UpdateJigglingButton(hDlg);
+                }
+                else if (!shouldBeJiggling && g_IsJiggling) {
+                    // Auto-stop: We're outside time range but still jiggling
+                    StopJiggling();
+                    UpdateJigglingButton(hDlg);
+                }
+            }
+        }
         break;
 
     case WM_TRAYICON:
@@ -350,6 +631,17 @@ INT_PTR CALLBACK MainDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
         break;
 
     case WM_CLOSE:
+        // Save all settings (time values already updated in g_Settings via EN_CHANGE)
+        SaveSettings();
+
+        // Kill timers
+        if (g_IsJiggling) {
+            KillTimer(hDlg, TIMER_JIGGLE);
+        }
+        if (g_Settings.enableTimeRestriction) {
+            KillTimer(hDlg, TIMER_TIME_CHECK);
+        }
+
         if (g_nid.hWnd) {
             Shell_NotifyIcon(NIM_DELETE, &g_nid);
         }

@@ -18,6 +18,21 @@
 #define IDC_STATIC_SETTINGS             1009
 #define IDC_STATIC_PERIOD_LABEL         1010
 
+// Time restriction controls
+#define IDC_CHECK_ENABLE_TIME           1011
+#define IDC_EDIT_START_HOUR             1012
+#define IDC_SPIN_START_HOUR             1013
+#define IDC_EDIT_START_MINUTE           1014
+#define IDC_SPIN_START_MINUTE           1015
+#define IDC_EDIT_END_HOUR               1016
+#define IDC_SPIN_END_HOUR               1017
+#define IDC_EDIT_END_MINUTE             1018
+#define IDC_SPIN_END_MINUTE             1019
+#define IDC_STATIC_START_TIME           1020
+#define IDC_STATIC_END_TIME             1021
+#define IDC_STATIC_COLON1               1022
+#define IDC_STATIC_COLON2               1023
+
 #define ID_TRAY_OPEN                    2001
 #define ID_TRAY_START                   2002
 #define ID_TRAY_STOP                    2003
@@ -25,6 +40,7 @@
 
 #define WM_TRAYICON                     (WM_USER + 1)
 #define TIMER_JIGGLE                    1
+#define TIMER_TIME_CHECK                2
 
 // Next default values for new objects
 //
