@@ -39,7 +39,8 @@ struct Settings {
     int startMinute;    // 0-59
     int endHour;        // 0-23
     int endMinute;      // 0-59
-} g_Settings = { false, false, 60, false, false, 9, 0, 18, 0 };
+    bool enabledDays[7];  // 0=Sun, 1=Mon, ..., 6=Sat (matches SYSTEMTIME.wDayOfWeek)
+} g_Settings = { false, false, 60, false, false, 9, 0, 18, 0, { true, true, true, true, true, true, true } };
 
 // State
 bool g_IsJiggling = false;
@@ -63,6 +64,7 @@ bool CreateSingleInstanceMutex();
 bool IsWithinTimeRange();
 void UpdateJigglingButton(HWND hDlg);
 void GetTimeRangeString(TCHAR* buffer, size_t bufferSize);
+void GetActiveDaysString(TCHAR* buffer, size_t bufferSize);
 void DrawPlayPauseButton(LPDRAWITEMSTRUCT pDIS);
 
 // Get INI file path (in the same directory as the executable)
@@ -87,6 +89,39 @@ void LoadSettings() {
     g_Settings.startMinute = GetPrivateProfileInt(_T("Settings"), _T("StartMinute"), 0, g_IniFilePath);
     g_Settings.endHour = GetPrivateProfileInt(_T("Settings"), _T("EndHour"), 18, g_IniFilePath);
     g_Settings.endMinute = GetPrivateProfileInt(_T("Settings"), _T("EndMinute"), 0, g_IniFilePath);
+
+    // Load weekday settings (default: all days enabled)
+    TCHAR enabledDaysStr[256];
+    GetPrivateProfileString(_T("Settings"), _T("EnabledDays"),
+                           _T("Sun,Mon,Tue,Wed,Thu,Fri,Sat"),
+                           enabledDaysStr, 256, g_IniFilePath);
+
+    // Initialize all days to false first
+    for (int i = 0; i < 7; i++) {
+        g_Settings.enabledDays[i] = false;
+    }
+
+    // Parse comma-separated day names
+    static const TCHAR* dayNames[7] = {
+        _T("Sun"), _T("Mon"), _T("Tue"), _T("Wed"),
+        _T("Thu"), _T("Fri"), _T("Sat")
+    };
+
+    TCHAR* context = NULL;
+    TCHAR* token = _tcstok_s(enabledDaysStr, _T(","), &context);
+    while (token != NULL) {
+        // Skip leading spaces
+        while (*token == _T(' ')) token++;
+
+        // Find matching day name (case-insensitive)
+        for (int i = 0; i < 7; i++) {
+            if (_tcsicmp(token, dayNames[i]) == 0) {
+                g_Settings.enabledDays[i] = true;
+                break;
+            }
+        }
+        token = _tcstok_s(NULL, _T(","), &context);
+    }
 
     // Validate jiggle period
     if (g_Settings.jigglePeriod < 1) g_Settings.jigglePeriod = 1;
@@ -127,6 +162,27 @@ void SaveSettings() {
 
     _stprintf_s(buffer, 32, _T("%d"), g_Settings.endMinute);
     WritePrivateProfileString(_T("Settings"), _T("EndMinute"), buffer, g_IniFilePath);
+
+    // Save weekday settings
+    TCHAR enabledDaysStr[256] = { 0 };
+    static const TCHAR* dayNames[7] = {
+        _T("Sun"), _T("Mon"), _T("Tue"), _T("Wed"),
+        _T("Thu"), _T("Fri"), _T("Sat")
+    };
+
+    bool first = true;
+    for (int i = 0; i < 7; i++) {
+        if (g_Settings.enabledDays[i]) {
+            if (!first) {
+                _tcscat_s(enabledDaysStr, 256, _T(","));
+            }
+            _tcscat_s(enabledDaysStr, 256, dayNames[i]);
+            first = false;
+        }
+    }
+
+    // Save comma-separated day list (empty string if no days enabled)
+    WritePrivateProfileString(_T("Settings"), _T("EnabledDays"), enabledDaysStr, g_IniFilePath);
 }
 
 // Perform the mouse jiggle
@@ -173,6 +229,12 @@ bool IsWithinTimeRange() {
     SYSTEMTIME st;
     GetLocalTime(&st);
 
+    // First check if current day is enabled (st.wDayOfWeek: 0=Sun, 1=Mon, ..., 6=Sat)
+    if (!g_Settings.enabledDays[st.wDayOfWeek]) {
+        return false;  // Day is disabled, regardless of time
+    }
+
+    // Then check time range
     int currentMinutes = st.wHour * 60 + st.wMinute;
     int startMinutes = g_Settings.startHour * 60 + g_Settings.startMinute;
     int endMinutes = g_Settings.endHour * 60 + g_Settings.endMinute;
@@ -294,6 +356,34 @@ void GetTimeRangeString(TCHAR* buffer, size_t bufferSize) {
                 g_Settings.endHour, g_Settings.endMinute);
 }
 
+// Get active days string for display
+void GetActiveDaysString(TCHAR* buffer, size_t bufferSize) {
+    static const TCHAR* dayAbbrevs[7] = {
+        _T("Sun"), _T("Mon"), _T("Tue"), _T("Wed"),
+        _T("Thu"), _T("Fri"), _T("Sat")
+    };
+
+    buffer[0] = _T('\0');
+    int count = 0;
+
+    for (int i = 0; i < 7; i++) {
+        if (g_Settings.enabledDays[i]) {
+            if (count > 0) {
+                _tcscat_s(buffer, bufferSize, _T(","));
+            }
+            _tcscat_s(buffer, bufferSize, dayAbbrevs[i]);
+            count++;
+        }
+    }
+
+    // Handle edge cases
+    if (count == 0) {
+        _tcscpy_s(buffer, bufferSize, _T("None"));
+    } else if (count == 7) {
+        _tcscpy_s(buffer, bufferSize, _T("Every day"));
+    }
+}
+
 // Update the period label
 void UpdatePeriodLabel(HWND hDlg) {
     TCHAR text[64];
@@ -309,8 +399,10 @@ void UpdateTrayIcon() {
         if (!g_IsJiggling) {
             if (g_Settings.enableTimeRestriction) {
                 TCHAR timeRange[64];
+                TCHAR days[64];
                 GetTimeRangeString(timeRange, 64);
-                _stprintf_s(text, 128, _T("Not jiggling. Active: %s"), timeRange);
+                GetActiveDaysString(days, 64);
+                _stprintf_s(text, 128, _T("Not jiggling. %s (%s)"), timeRange, days);
                 _tcscpy_s(g_nid.szTip, 128, text);
             } else {
                 _tcscpy_s(g_nid.szTip, 128, _T("Not jiggling the mouse."));
@@ -318,13 +410,16 @@ void UpdateTrayIcon() {
         } else {
             if (g_Settings.enableTimeRestriction) {
                 TCHAR timeRange[64];
+                TCHAR days[64];
                 GetTimeRangeString(timeRange, 64);
-                _stprintf_s(text, 128, _T("Jiggling every %d s, %s Zen. Active: %s"),
+                GetActiveDaysString(days, 64);
+                _stprintf_s(text, 128, _T("Jiggling %d s, %s Zen. %s (%s)"),
                     g_Settings.jigglePeriod,
                     g_Settings.zenJiggle ? _T("with") : _T("without"),
-                    timeRange);
+                    timeRange,
+                    days);
             } else {
-                _stprintf_s(text, 128, _T("Jiggling mouse every %d s, %s Zen."),
+                _stprintf_s(text, 128, _T("Jiggling %d s, %s Zen."),
                     g_Settings.jigglePeriod,
                     g_Settings.zenJiggle ? _T("with") : _T("without"));
             }
@@ -444,6 +539,19 @@ INT_PTR CALLBACK MainDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
             EnableWindow(GetDlgItem(hDlg, IDC_EDIT_END_HOUR), enableTimeControls);
             EnableWindow(GetDlgItem(hDlg, IDC_EDIT_END_MINUTE), enableTimeControls);
 
+            // Initialize weekday checkboxes
+            static const int weekdayControls[7] = {
+                IDC_CHECK_SUNDAY, IDC_CHECK_MONDAY, IDC_CHECK_TUESDAY,
+                IDC_CHECK_WEDNESDAY, IDC_CHECK_THURSDAY, IDC_CHECK_FRIDAY,
+                IDC_CHECK_SATURDAY
+            };
+
+            for (int i = 0; i < 7; i++) {
+                CheckDlgButton(hDlg, weekdayControls[i],
+                               g_Settings.enabledDays[i] ? BST_CHECKED : BST_UNCHECKED);
+                EnableWindow(GetDlgItem(hDlg, weekdayControls[i]), enableTimeControls);
+            }
+
             // Start jiggling if requested
             if (g_Settings.startJiggling) {
                 StartJiggling();
@@ -512,6 +620,17 @@ INT_PTR CALLBACK MainDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
                 EnableWindow(GetDlgItem(hDlg, IDC_EDIT_END_HOUR), enableTimeControls);
                 EnableWindow(GetDlgItem(hDlg, IDC_EDIT_END_MINUTE), enableTimeControls);
 
+                // Enable/disable weekday checkboxes
+                static const int weekdayControls[7] = {
+                    IDC_CHECK_SUNDAY, IDC_CHECK_MONDAY, IDC_CHECK_TUESDAY,
+                    IDC_CHECK_WEDNESDAY, IDC_CHECK_THURSDAY, IDC_CHECK_FRIDAY,
+                    IDC_CHECK_SATURDAY
+                };
+
+                for (int i = 0; i < 7; i++) {
+                    EnableWindow(GetDlgItem(hDlg, weekdayControls[i]), enableTimeControls);
+                }
+
                 // Start/stop time check timer
                 if (g_Settings.enableTimeRestriction) {
                     SetTimer(hDlg, TIMER_TIME_CHECK, 1000, NULL);
@@ -541,6 +660,29 @@ INT_PTR CALLBACK MainDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
                 if (g_Settings.startMinute > 59) g_Settings.startMinute = 59;
                 if (g_Settings.endHour > 23) g_Settings.endHour = 23;
                 if (g_Settings.endMinute > 59) g_Settings.endMinute = 59;
+
+                UpdateTrayIcon();
+            }
+            break;
+
+        case IDC_CHECK_SUNDAY:
+        case IDC_CHECK_MONDAY:
+        case IDC_CHECK_TUESDAY:
+        case IDC_CHECK_WEDNESDAY:
+        case IDC_CHECK_THURSDAY:
+        case IDC_CHECK_FRIDAY:
+        case IDC_CHECK_SATURDAY:
+            {
+                // Map control ID to day index (0=Sun, 1=Mon, ..., 6=Sat)
+                int dayIndex = LOWORD(wParam) - IDC_CHECK_SUNDAY;
+                g_Settings.enabledDays[dayIndex] =
+                    IsDlgButtonChecked(hDlg, LOWORD(wParam)) == BST_CHECKED;
+                SaveSettings();
+
+                // Immediate time check to auto-start/stop if needed
+                if (g_Settings.enableTimeRestriction) {
+                    PostMessage(hDlg, WM_TIMER, TIMER_TIME_CHECK, 0);
+                }
 
                 UpdateTrayIcon();
             }

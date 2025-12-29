@@ -33,6 +33,16 @@
 #define IDC_STATIC_COLON1               1022
 #define IDC_STATIC_COLON2               1023
 
+// Weekday controls
+#define IDC_STATIC_WEEKDAYS             1024
+#define IDC_CHECK_SUNDAY                1025
+#define IDC_CHECK_MONDAY                1026
+#define IDC_CHECK_TUESDAY               1027
+#define IDC_CHECK_WEDNESDAY             1028
+#define IDC_CHECK_THURSDAY              1029
+#define IDC_CHECK_FRIDAY                1030
+#define IDC_CHECK_SATURDAY              1031
+
 #define ID_TRAY_OPEN                    2001
 #define ID_TRAY_START                   2002
 #define ID_TRAY_STOP                    2003
@@ -48,7 +58,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        104
 #define _APS_NEXT_COMMAND_VALUE         2005
-#define _APS_NEXT_CONTROL_VALUE         1011
+#define _APS_NEXT_CONTROL_VALUE         1032
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
