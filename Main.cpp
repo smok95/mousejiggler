@@ -24,6 +24,7 @@ HINSTANCE g_hInst = NULL;
 HWND g_hMainDlg = NULL;
 NOTIFYICONDATA g_nid = { 0 };
 HMENU g_hTrayMenu = NULL;
+UINT g_uTaskbarCreated = 0;  // TaskbarCreated message
 
 // Settings
 struct Settings {
@@ -51,6 +52,7 @@ INT_PTR CALLBACK AboutDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 void LoadSettings();
 void SaveSettings();
 void UpdateTrayIcon();
+void CreateTrayIcon();
 void UpdatePeriodLabel(HWND hDlg);
 void MinimizeToTray();
 void RestoreFromTray();
@@ -332,21 +334,32 @@ void UpdateTrayIcon() {
     }
 }
 
+// Add or recreate tray icon
+void CreateTrayIcon() {
+    if (g_nid.hWnd == NULL) {
+        ZeroMemory(&g_nid, sizeof(g_nid));
+        g_nid.cbSize = sizeof(NOTIFYICONDATA);
+        g_nid.hWnd = g_hMainDlg;
+        g_nid.uID = 1;
+        g_nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+        g_nid.uCallbackMessage = WM_TRAYICON;
+        g_nid.hIcon = LoadIcon(g_hInst, MAKEINTRESOURCE(IDI_TRAYICON));
+        UpdateTrayIcon();
+    }
+
+    BOOL result = Shell_NotifyIcon(NIM_ADD, &g_nid);
+    if (!result) {
+        DWORD error = GetLastError();
+        TCHAR msg[256];
+        _stprintf_s(msg, 256, _T("Failed to add tray icon: error 0x%08X"), error);
+        OutputDebugString(msg);
+    }
+}
+
 // Minimize to system tray
 void MinimizeToTray() {
     ShowWindow(g_hMainDlg, SW_HIDE);
-
-    // Add tray icon
-    ZeroMemory(&g_nid, sizeof(g_nid));
-    g_nid.cbSize = sizeof(NOTIFYICONDATA);
-    g_nid.hWnd = g_hMainDlg;
-    g_nid.uID = 1;
-    g_nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
-    g_nid.uCallbackMessage = WM_TRAYICON;
-    g_nid.hIcon = LoadIcon(g_hInst, MAKEINTRESOURCE(IDI_TRAYICON));
-    UpdateTrayIcon();
-
-    Shell_NotifyIcon(NIM_ADD, &g_nid);
+    CreateTrayIcon();
 }
 
 // Restore from system tray
@@ -452,6 +465,18 @@ INT_PTR CALLBACK MainDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
             return TRUE;
         }
 
+    default:
+        // Handle TaskbarCreated message (explorer.exe restart)
+        if (message == g_uTaskbarCreated && g_uTaskbarCreated != 0) {
+            // Recreate tray icon if window is hidden
+            if (!IsWindowVisible(hDlg) && g_nid.hWnd != NULL) {
+                OutputDebugString(_T("TaskbarCreated: Recreating tray icon"));
+                CreateTrayIcon();
+            }
+            return TRUE;
+        }
+        break;
+
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
         case IDC_CHECK_JIGGLING:
@@ -526,7 +551,13 @@ INT_PTR CALLBACK MainDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
             break;
 
         case IDC_BUTTON_MINIMIZE:
-            MinimizeToTray();
+            // Exit button - confirm and close
+            if (MessageBox(hDlg,
+                _T("Are you sure you want to exit Mouse Jiggler?"),
+                _T("Confirm Exit"),
+                MB_YESNO | MB_ICONQUESTION) == IDYES) {
+                SendMessage(hDlg, WM_DESTROY, 0, 0);
+            }
             break;
 
         case ID_TRAY_OPEN:
@@ -544,7 +575,13 @@ INT_PTR CALLBACK MainDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
             break;
 
         case ID_TRAY_EXIT:
-            SendMessage(hDlg, WM_CLOSE, 0, 0);
+            // Confirm and exit
+            if (MessageBox(hDlg,
+                _T("Are you sure you want to exit Mouse Jiggler?"),
+                _T("Confirm Exit"),
+                MB_YESNO | MB_ICONQUESTION) == IDYES) {
+                SendMessage(hDlg, WM_DESTROY, 0, 0);
+            }
             break;
         }
         break;
@@ -631,7 +668,12 @@ INT_PTR CALLBACK MainDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
         break;
 
     case WM_CLOSE:
-        // Save all settings (time values already updated in g_Settings via EN_CHANGE)
+        // X button minimizes to tray instead of closing
+        MinimizeToTray();
+        break;
+
+    case WM_DESTROY:
+        // Save all settings
         SaveSettings();
 
         // Kill timers
@@ -642,13 +684,11 @@ INT_PTR CALLBACK MainDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
             KillTimer(hDlg, TIMER_TIME_CHECK);
         }
 
+        // Remove tray icon
         if (g_nid.hWnd) {
             Shell_NotifyIcon(NIM_DELETE, &g_nid);
         }
-        DestroyWindow(hDlg);
-        break;
 
-    case WM_DESTROY:
         PostQuitMessage(0);
         break;
     }
@@ -661,6 +701,27 @@ bool CreateSingleInstanceMutex() {
     HANDLE hMutex = CreateMutex(NULL, TRUE, _T("Global\\ArkaneSystems.MouseJiggler"));
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
         if (hMutex) CloseHandle(hMutex);
+
+        // Try to find and activate the existing window
+        HWND hExistingWnd = FindWindow(NULL, _T("Mouse Jiggler"));
+        if (hExistingWnd) {
+            // If window is hidden (minimized to tray), restore it
+            if (!IsWindowVisible(hExistingWnd)) {
+                // Send message to restore from tray
+                SendMessage(hExistingWnd, WM_COMMAND, MAKEWPARAM(ID_TRAY_OPEN, 0), 0);
+            } else {
+                // If visible but minimized, restore it
+                if (IsIconic(hExistingWnd)) {
+                    ShowWindow(hExistingWnd, SW_RESTORE);
+                }
+                // Bring to foreground
+                SetForegroundWindow(hExistingWnd);
+            }
+
+            // Flash the window to draw user's attention
+            FlashWindow(hExistingWnd, TRUE);
+        }
+
         return false;
     }
     return true;
@@ -734,6 +795,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
     icex.dwICC = ICC_STANDARD_CLASSES | ICC_BAR_CLASSES;
     InitCommonControlsEx(&icex);
+
+    // Register TaskbarCreated message for explorer.exe restart detection
+    g_uTaskbarCreated = RegisterWindowMessage(_T("TaskbarCreated"));
 
     // Initialize INI file path and load settings
     InitializeIniPath();
