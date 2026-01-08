@@ -567,7 +567,7 @@ INT_PTR CALLBACK MainDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
 
             // Minimize on startup if requested
             if (g_Settings.minimizeOnStartup) {
-                PostMessage(hDlg, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_MINIMIZE, BN_CLICKED), 0);
+                MinimizeToTray();
             }
 
             return TRUE;

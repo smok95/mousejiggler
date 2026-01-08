@@ -123,8 +123,8 @@ IDI_TRAYICON            ICON                    "icon.ico"
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,4,0,0
- PRODUCTVERSION 0,4,0,0
+ FILEVERSION 0,4,1,0
+ PRODUCTVERSION 0,4,1,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -141,12 +141,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "d0nzs00n@gmail.com"
             VALUE "FileDescription", "Mouse Jiggler - C++ Win32 Version"
-            VALUE "FileVersion", "0.4.0.0"
+            VALUE "FileVersion", "0.4.1.0"
             VALUE "InternalName", "MouseJiggler.exe"
             VALUE "LegalCopyright", "Copyright (C) 2025"
             VALUE "OriginalFilename", "MouseJiggler.exe"
             VALUE "ProductName", "Mouse Jiggler"
-            VALUE "ProductVersion", "0.4.0.0"
+            VALUE "ProductVersion", "0.4.1.0"
         END
     END
     BLOCK "VarFileInfo"
